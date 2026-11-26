@@ -1,6 +1,7 @@
 """CreatorLens API: semantic creator search + outreach shortlists."""
 import csv
 import io
+import os
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Literal
@@ -33,6 +34,9 @@ async def lifespan(_app: FastAPI):
     global pool
     pool = ConnectionPool(DATABASE_URL, min_size=1, max_size=5, configure=configure_connection,
                           kwargs={"row_factory": dict_row, "prepare_threshold": None}, open=True)
+    # Load the embedding model once, before the server accepts traffic
+    if os.getenv("WARM_MODEL", "1") == "1":
+        embed_query("warm up")
     yield
     pool.close()
 
