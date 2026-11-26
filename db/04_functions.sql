@@ -56,10 +56,11 @@ ranked as (
     from candidates c
 ),
 relevance as (
+    -- "strong" matches: within 0.08 of the single best passage for this brief
     select r.channel_id,
-           avg(r.similarity) filter (where r.rank_in_channel <= 3) as top3_similarity,
-           count(distinct r.video_id)                              as matching_videos
-    from ranked r
+           avg(r.similarity) filter (where r.rank_in_channel <= 3)                          as top3_similarity,
+           count(distinct r.video_id) filter (where r.similarity >= r.best_overall - 0.08) as matching_videos
+    from (select rk.*, max(rk.similarity) over () as best_overall from ranked rk) r
     group by r.channel_id
 ),
 evidence as (
@@ -99,9 +100,12 @@ scored as (
            rl.top3_similarity, rl.matching_videos,
            rs.recent_videos, rs.median_views, rs.engagement_rate, rs.last_upload,
            least(1.0, rs.median_views / nullif(cr.subscriber_count, 0)) as reach_ratio,
-           -- relevance: closeness to the best match in this result set + breadth across videos
-           0.75 * rl.top3_similarity / nullif(max(rl.top3_similarity) over (), 0)
-             + 0.25 * least(rl.matching_videos, 5) / 5.0                         as relevance_score,
+           -- relevance: min-max scaled within this result set (embedding similarities are
+           -- compressed into a narrow band, so raw values barely separate creators)
+           -- plus breadth: how many different videos strongly match
+           0.8 * coalesce((rl.top3_similarity - min(rl.top3_similarity) over ())
+                 / nullif(max(rl.top3_similarity) over () - min(rl.top3_similarity) over (), 0), 1)
+             + 0.2 * least(rl.matching_videos, 5) / 5.0                          as relevance_score,
            cume_dist() over (order by coalesce(rs.engagement_rate, 0))           as engagement_pct,
            cume_dist() over (order by coalesce(rs.median_views / nullif(cr.subscriber_count, 0), 0)) as reach_pct
     from relevance rl
@@ -109,7 +113,7 @@ scored as (
     left join recent_stats rs on rs.channel_id = rl.channel_id
 )
 select s.channel_id, s.title, s.handle, s.thumbnail_url, s.country, s.subscriber_count,
-       round((100 * (0.65 * s.relevance_score + 0.20 * s.engagement_pct + 0.15 * s.reach_pct))::numeric, 1) as match_score,
+       round((100 * (0.75 * s.relevance_score + 0.15 * s.engagement_pct + 0.10 * s.reach_pct))::numeric, 1) as match_score,
        round((100 * s.relevance_score)::numeric, 1)            as relevance_score,
        round((100 * coalesce(s.engagement_rate, 0))::numeric, 2) as engagement_rate,
        round(coalesce(s.reach_ratio, 0)::numeric, 3)           as reach_ratio,
