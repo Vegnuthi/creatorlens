@@ -8,7 +8,9 @@ services:
     envVars:
       - key: DATABASE_URL
         sync: false
-      - key: HF_TOKEN          # query embeddings come from Hugging Face; the model doesn't fit in 512 MB
-        sync: false
       - key: PYTHON_VERSION
         value: 3.12.7
+      # The embedding model doesn't fit in the free 512 MB server, so the visitor's browser
+      # computes the query embedding (transformers.js) and sends it with each search.
+      - key: SERVER_EMBEDDINGS
+        value: "0"
