@@ -6,18 +6,21 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Literal
 
+import numpy as np
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from psycopg.rows import dict_row
 from psycopg.types.json import Jsonb
 from psycopg_pool import ConnectionPool
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from ingest.config import DATABASE_URL
 from ingest.embeddings import embed_query
 
 STATIC = Path(__file__).parent / "static"
+# "0" on small servers: the browser computes the query embedding and sends it with the search
+SERVER_EMBEDDINGS = os.getenv("SERVER_EMBEDDINGS", "1") == "1"
 Status = Literal["to_contact", "contacted", "replied", "negotiating", "signed", "rejected"]
 
 
@@ -35,7 +38,7 @@ async def lifespan(_app: FastAPI):
     pool = ConnectionPool(DATABASE_URL, min_size=1, max_size=5, configure=configure_connection,
                           kwargs={"row_factory": dict_row, "prepare_threshold": None}, open=True)
     # Load the embedding model once, before the server accepts traffic
-    if os.getenv("WARM_MODEL", "1") == "1":
+    if SERVER_EMBEDDINGS and os.getenv("WARM_MODEL", "1") == "1":
         try:
             embed_query("warm up")
         except Exception as exc:  # never block startup; the first search will retry
@@ -77,18 +80,31 @@ class SearchRequest(BaseModel):
     language: str | None = None
     recent_days: int = Field(730, ge=30, le=3650)
     limit: int = Field(20, ge=1, le=50)
+    embedding: list[float] | None = None   # 384 numbers computed in the browser (optional)
+
+    @field_validator("embedding")
+    @classmethod
+    def check_dim(cls, v):
+        if v is not None and len(v) != 384:
+            raise ValueError("embedding must have 384 numbers")
+        return v
 
 
 @app.post("/api/search")
 def search(req: SearchRequest):
-    vec = embed_query(req.query)
+    if req.embedding is not None:
+        vec = np.asarray(req.embedding, dtype=np.float32)
+    elif SERVER_EMBEDDINGS:
+        vec = embed_query(req.query)
+    else:
+        raise HTTPException(400, "Your browser couldn't load the search model. Refresh the page and try again.")
     rows = query(
         "select * from match_creators(%s, %s, %s, %s, %s, %s)",
         (vec, req.min_subs, req.max_subs, req.language or None, req.recent_days, req.limit),
     )
     query(
         "insert into search_logs (query, filters, result_count, top_channel) values (%s, %s, %s, %s)",
-        (req.query, Jsonb(req.model_dump(exclude={"query"})), len(rows), rows[0]["channel_id"] if rows else None),
+        (req.query, Jsonb(req.model_dump(exclude={"query", "embedding"})), len(rows), rows[0]["channel_id"] if rows else None),
     )
     return {"query": req.query, "results": rows}
 
