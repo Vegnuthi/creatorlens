@@ -36,7 +36,10 @@ async def lifespan(_app: FastAPI):
                           kwargs={"row_factory": dict_row, "prepare_threshold": None}, open=True)
     # Load the embedding model once, before the server accepts traffic
     if os.getenv("WARM_MODEL", "1") == "1":
-        embed_query("warm up")
+        try:
+            embed_query("warm up")
+        except Exception as exc:  # never block startup; the first search will retry
+            print(f"warm-up skipped: {exc}")
     yield
     pool.close()
 
