@@ -3,10 +3,13 @@ services:
     name: creatorlens
     runtime: python
     plan: free
-    buildCommand: pip install -r requirements.txt
-    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    # download the AI model during the build so the live server only has to load it once
+    buildCommand: pip install -r requirements.txt && python -m ingest.embeddings
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT --workers 1
     envVars:
       - key: DATABASE_URL
         sync: false
       - key: PYTHON_VERSION
         value: 3.12.7
+      - key: EMBED_THREADS
+        value: "1"
