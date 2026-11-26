@@ -1,0 +1,19 @@
+# One channel per line: @handle, channel ID (UC...) or full URL.
+# Starter list: Indian tech, career and finance creators, plus a couple of off-topic
+# channels so you can show the search correctly ranks them low.
+# Any handle that doesn't resolve is skipped with a message, so edit freely.
+
+# Coding / placements
+@CodeWithHarry
+@ApnaCollegeOfficial
+@takeUforward
+@KunalKushwaha
+@Telusko
+@LoveBabbar1
+
+# Careers / personal finance
+@warikoo
+@thinkschool
+
+# Off-topic controls
+@NishaMadhulika

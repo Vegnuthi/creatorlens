@@ -1,0 +1,28 @@
+# More creators across categories. Handles that don't resolve are skipped automatically.
+
+# AI / data science / coding
+@krishnaik06
+@campusx-official
+@codebasics
+@chaiaurcode
+@AnujBhaiya
+@tanaypratap
+
+# Careers / productivity
+@ishansharma7390
+@AliAbdaal
+
+# Personal finance / money
+@LabourLawAdvisor
+@CARachanaRanade
+@pranjalkamra
+@financewithsharan
+@akshatzayn
+
+# Business / marketing
+@BeerBiceps
+@neilpatel
+
+# Off-topic controls (food, travel)
+@KabitasKitchen
+@mumbikernikhil

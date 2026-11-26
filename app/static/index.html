@@ -1,0 +1,434 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CreatorLens: find creators by what they actually say</title>
+<meta name="description" content="Semantic search over YouTube transcripts to find creators whose content matches your campaign brief.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=Newsreader:ital,opsz,wght@1,6..72,400;1,6..72,500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --ink: #1B2340;
+    --ink-soft: #545C78;
+    --line: #D5DAE5;
+    --bg: #EDF0F5;
+    --surface: #FFFFFF;
+    --teal: #0E7C7B;
+    --teal-soft: #D3ECEA;
+    --marker: #FFE27A;
+    --danger: #B3261E;
+    --sans: "Instrument Sans", system-ui, sans-serif;
+    --quote: "Newsreader", Georgia, serif;
+  }
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body { margin: 0; font: 400 16px/1.5 var(--sans); color: var(--ink); background: var(--bg); }
+  a { color: var(--teal); }
+  button, input, select, textarea { font: inherit; color: inherit; }
+  :focus-visible { outline: 3px solid var(--teal); outline-offset: 2px; }
+
+  .wrap { max-width: 1120px; margin: 0 auto; padding: 0 24px; }
+
+  /* top bar */
+  .bar { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 18px 0; }
+  .brand { font-weight: 700; font-size: 19px; letter-spacing: -0.01em; display: flex; align-items: center; gap: 10px; }
+  .brand svg { flex: none; }
+  .stats { color: var(--ink-soft); font-size: 14px; }
+  .btn { border: 1px solid var(--ink); background: var(--surface); padding: 8px 14px; border-radius: 8px; cursor: pointer; font-weight: 500; }
+  .btn:hover { background: var(--ink); color: #fff; }
+  .btn.primary { background: var(--ink); color: #fff; }
+  .btn.primary:hover { background: #2C3866; }
+  .btn.small { padding: 5px 10px; font-size: 14px; }
+  .count { display: inline-block; min-width: 22px; padding: 0 6px; margin-left: 6px; border-radius: 11px; background: var(--marker); color: var(--ink); font-size: 13px; font-weight: 600; text-align: center; }
+
+  /* search */
+  .search { padding: 40px 0 28px; }
+  .search h1 { font-size: clamp(30px, 5vw, 48px); line-height: 1.08; letter-spacing: -0.025em; font-weight: 600; margin: 0 0 22px; max-width: 18ch; }
+  .brief { display: flex; gap: 10px; background: var(--surface); border: 2px solid var(--ink); border-radius: 12px; padding: 8px; }
+  .brief textarea { flex: 1; border: 0; resize: none; padding: 10px 12px; font-size: 18px; line-height: 1.4; min-height: 56px; background: transparent; }
+  .brief textarea:focus { outline: none; }
+  .brief:focus-within { box-shadow: 0 0 0 4px var(--teal-soft); }
+  .brief .btn { align-self: flex-end; padding: 12px 20px; }
+  .examples { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; align-items: center; }
+  .examples span { color: var(--ink-soft); font-size: 14px; margin-right: 2px; }
+  .chip { border: 1px dashed var(--ink-soft); background: transparent; border-radius: 999px; padding: 4px 12px; font-size: 14px; cursor: pointer; }
+  .chip:hover { border-style: solid; background: var(--surface); }
+  .filters { display: flex; flex-wrap: wrap; gap: 18px; margin-top: 18px; }
+  .filters label { font-size: 14px; color: var(--ink-soft); display: flex; align-items: center; gap: 8px; }
+  .filters select { border: 1px solid var(--line); background: var(--surface); border-radius: 6px; padding: 5px 8px; color: var(--ink); }
+
+  /* results */
+  .status { color: var(--ink-soft); padding: 8px 0 18px; min-height: 40px; }
+  .status.error { color: var(--danger); }
+  .results { list-style: none; margin: 0; padding: 0 0 80px; }
+  .creator { display: grid; grid-template-columns: 72px 1fr; gap: 0 20px; padding: 26px 0; border-top: 1px solid var(--line); }
+  .score { text-align: left; }
+  .score b { display: block; font-size: 34px; line-height: 1; font-weight: 600; letter-spacing: -0.03em; }
+  .score small { color: var(--ink-soft); font-size: 13px; }
+  .who { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+  .who img { width: 44px; height: 44px; border-radius: 50%; background: var(--line); }
+  .who h2 { margin: 0; font-size: 20px; font-weight: 600; letter-spacing: -0.01em; }
+  .who h2 a { color: inherit; text-decoration: none; }
+  .who h2 a:hover { text-decoration: underline; }
+  .who .meta { color: var(--ink-soft); font-size: 14px; }
+  .who .actions { margin-left: auto; display: flex; gap: 8px; }
+  .metrics { display: flex; flex-wrap: wrap; gap: 6px 26px; margin: 14px 0 4px; font-size: 14px; color: var(--ink-soft); }
+  .metrics strong { color: var(--ink); font-weight: 600; }
+  .meter { display: inline-block; width: 70px; height: 6px; border-radius: 3px; background: var(--teal-soft); vertical-align: middle; margin-left: 6px; overflow: hidden; }
+  .meter i { display: block; height: 100%; background: var(--teal); }
+
+  .quotes { list-style: none; margin: 16px 0 0; padding: 0; display: grid; gap: 14px; }
+  .quote { border-left: 3px solid var(--ink); padding: 2px 0 2px 16px; }
+  .quote p { margin: 0 0 6px; font-family: var(--quote); font-style: italic; font-size: 19px; line-height: 1.45; max-width: 68ch; }
+  .quote mark { background: linear-gradient(transparent 12%, var(--marker) 12%, var(--marker) 88%, transparent 88%); color: inherit; padding: 0 2px; }
+  .quote .src { font-size: 14px; color: var(--ink-soft); }
+  .quote .src a { font-weight: 600; }
+
+  .detail { margin-top: 18px; padding: 16px; background: var(--surface); border-radius: 10px; font-size: 14px; display: none; }
+  .detail.open { display: block; }
+  .detail table { width: 100%; border-collapse: collapse; }
+  .detail td, .detail th { text-align: left; padding: 6px 8px 6px 0; border-bottom: 1px solid var(--bg); }
+  .detail th { color: var(--ink-soft); font-weight: 500; }
+  .spark { display: block; margin: 8px 0 14px; }
+
+  .empty { padding: 40px 0 80px; color: var(--ink-soft); max-width: 60ch; }
+
+  /* shortlist drawer */
+  .drawer { position: fixed; inset: 0 0 0 auto; width: min(440px, 100%); background: var(--surface); border-left: 2px solid var(--ink); transform: translateX(100%); transition: transform .25s ease; display: flex; flex-direction: column; z-index: 20; }
+  .drawer.open { transform: none; }
+  .drawer header { display: flex; justify-content: space-between; align-items: center; padding: 18px 20px; border-bottom: 1px solid var(--line); }
+  .drawer header h2 { margin: 0; font-size: 18px; }
+  .drawer .body { padding: 16px 20px; overflow-y: auto; flex: 1; }
+  .drawer .row { display: flex; gap: 8px; margin-bottom: 14px; }
+  .drawer .row select, .drawer .row input { flex: 1; border: 1px solid var(--line); border-radius: 6px; padding: 7px 9px; }
+  .funnel { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 6px 0 18px; }
+  .funnel div { background: var(--bg); border-radius: 8px; padding: 8px 10px; font-size: 13px; color: var(--ink-soft); }
+  .funnel b { display: block; font-size: 20px; color: var(--ink); }
+  .sl-item { display: grid; grid-template-columns: 36px 1fr auto; gap: 10px; align-items: center; padding: 10px 0; border-top: 1px solid var(--line); }
+  .initial { display: inline-grid; place-items: center; border-radius: 50%; background: var(--teal-soft); color: var(--teal); font-weight: 600; flex: none; }
+  .sl-item img { width: 36px; height: 36px; border-radius: 50%; background: var(--line); }
+  .sl-item .name { font-weight: 600; font-size: 15px; }
+  .sl-item .sub { color: var(--ink-soft); font-size: 13px; }
+  .sl-item select { border: 1px solid var(--line); border-radius: 6px; padding: 4px 6px; font-size: 13px; }
+  .linkbtn { background: none; border: 0; color: var(--danger); font-size: 13px; cursor: pointer; padding: 0; }
+  .scrim { position: fixed; inset: 0; background: rgba(27, 35, 64, .35); opacity: 0; pointer-events: none; transition: opacity .25s; z-index: 10; }
+  .scrim.open { opacity: 1; pointer-events: auto; }
+  .toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); background: var(--ink); color: #fff; padding: 10px 16px; border-radius: 8px; font-size: 14px; opacity: 0; transition: opacity .2s; pointer-events: none; z-index: 30; }
+  .toast.show { opacity: 1; }
+
+  @media (max-width: 640px) {
+    .wrap { padding: 0 16px; }
+    .stats { display: none; }
+    .brief { flex-direction: column; }
+    .brief .btn { align-self: stretch; }
+    .creator { grid-template-columns: 1fr; }
+    .score { display: flex; align-items: baseline; gap: 8px; margin-bottom: 10px; }
+    .score b { display: inline; font-size: 28px; }
+    .who .actions { margin-left: 0; width: 100%; }
+  }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="bar">
+    <div class="brand">
+      <svg width="26" height="26" viewBox="0 0 26 26" aria-hidden="true"><circle cx="11" cy="11" r="8" fill="none" stroke="#1B2340" stroke-width="2.5"/><rect x="7" y="9" width="8" height="4" fill="#FFE27A"/><path d="M17 17l6 6" stroke="#1B2340" stroke-width="2.5" stroke-linecap="round"/></svg>
+      CreatorLens
+    </div>
+    <span class="stats" id="stats"></span>
+    <button class="btn" id="openShortlist" type="button">Shortlists<span class="count" id="slCount">0</span></button>
+  </div>
+
+  <section class="search">
+    <h1>Find creators by what they actually say on camera.</h1>
+    <form class="brief" id="searchForm">
+      <label for="q" class="sr" style="position:absolute;left:-9999px">Campaign brief</label>
+      <textarea id="q" rows="2" placeholder="Describe the audience and topics you need, e.g. creators who help college students prepare for placement interviews" required minlength="3"></textarea>
+      <button class="btn primary" type="submit">Find creators</button>
+    </form>
+    <div class="examples" id="examples">
+      <span>Try:</span>
+      <button class="chip" type="button">Creators who help freshers crack placement interviews</button>
+      <button class="chip" type="button">Explaining AI and machine learning careers in simple Hindi</button>
+      <button class="chip" type="button">Personal finance advice for young salaried professionals</button>
+    </div>
+    <div class="filters">
+      <label>Audience size
+        <select id="size">
+          <option value="">Any</option>
+          <option value="0-100000">Under 100K</option>
+          <option value="100000-1000000">100K to 1M</option>
+          <option value="1000000-">Over 1M</option>
+        </select>
+      </label>
+      <label>Language
+        <select id="lang">
+          <option value="">Any</option>
+          <option value="en">English</option>
+          <option value="hi">Hindi</option>
+        </select>
+      </label>
+      <label>Videos from
+        <select id="recent">
+          <option value="180">Last 6 months</option>
+          <option value="365">Last year</option>
+          <option value="730" selected>Last 2 years</option>
+        </select>
+      </label>
+    </div>
+  </section>
+
+  <div class="status" id="status" role="status" aria-live="polite"></div>
+  <ol class="results" id="results"></ol>
+  <div class="empty" id="empty">
+    Describe your campaign above. CreatorLens reads creators' video transcripts, finds the moments that match your brief, and ranks creators by relevance, engagement and reach. Every result shows the exact quotes that earned the match.
+  </div>
+</div>
+
+<div class="scrim" id="scrim"></div>
+<aside class="drawer" id="drawer" aria-label="Shortlists">
+  <header>
+    <h2>Shortlists</h2>
+    <button class="btn small" id="closeShortlist" type="button">Close</button>
+  </header>
+  <div class="body">
+    <div class="row">
+      <select id="slSelect" aria-label="Active shortlist"></select>
+    </div>
+    <form class="row" id="newSl">
+      <input id="newSlName" placeholder="New shortlist, e.g. NSAT launch" aria-label="New shortlist name" required>
+      <button class="btn small" type="submit">Create</button>
+    </form>
+    <div id="slBody"></div>
+  </div>
+</aside>
+<div class="toast" id="toast" role="status"></div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const STATUSES = { to_contact: "To contact", contacted: "Contacted", replied: "Replied", negotiating: "Negotiating", signed: "Signed", rejected: "Rejected" };
+let lastQuery = "";
+let activeShortlist = null;
+let lastResults = [];
+
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const fmt = (n) => n == null ? "hidden" : n >= 1e6 ? (n / 1e6).toFixed(1).replace(/\.0$/, "") + "M" : n >= 1e3 ? Math.round(n / 1e3) + "K" : String(n);
+const clock = (s) => { s = Math.max(0, s | 0); const h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60), x = String(s % 60).padStart(2, "0"); return h ? `${h}:${String(m).padStart(2, "0")}:${x}` : `${m}:${x}`; };
+const avatar = (url, name, size) => url
+  ? `<img src="${esc(url)}" alt="" width="${size}" height="${size}" loading="lazy">`
+  : `<span class="initial" style="width:${size}px;height:${size}px" aria-hidden="true">${esc((name || "?").trim()[0])}</span>`;
+const daysAgo = (d) => { if (!d) return "no recent uploads"; const n = Math.round((Date.now() - new Date(d)) / 864e5); return n <= 0 ? "uploaded today" : `last upload ${n} day${n === 1 ? "" : "s"} ago`; };
+
+async function api(path, opts = {}) {
+  const res = await fetch(path, { headers: { "Content-Type": "application/json" }, ...opts });
+  if (!res.ok) {
+    let msg = `Request failed (${res.status})`;
+    try { const j = await res.json(); if (j.detail) msg = typeof j.detail === "string" ? j.detail : "Check the search inputs and try again."; } catch {}
+    throw new Error(msg);
+  }
+  return res.status === 204 ? null : res.json();
+}
+
+function toast(msg) { const t = $("toast"); t.textContent = msg; t.classList.add("show"); clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove("show"), 2200); }
+
+// highlight brief words that appear in the quote
+function highlight(text, query) {
+  const stop = new Set("the a an and or for of to in on with who that is are how what creators creator about my our your their".split(" "));
+  const words = [...new Set(query.toLowerCase().match(/[a-zऀ-ॿ]{4,}/g) || [])].filter((w) => !stop.has(w));
+  let html = esc(text);
+  if (!words.length) return html;
+  const stems = words.map((w) => w.replace(/(ing|ed|es|s)$/, "")).filter((w) => w.length >= 4);
+  const re = new RegExp(`\\b(${stems.map((w) => w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|")})\\w*`, "gi");
+  return html.replace(re, "<mark>$&</mark>");
+}
+
+function renderResults(rows) {
+  lastResults = rows;
+  const list = $("results");
+  $("empty").style.display = rows.length ? "none" : "block";
+  if (!rows.length) {
+    $("empty").textContent = "No creators matched. Widen the audience size or date range, or describe the brief in broader terms.";
+  }
+  list.innerHTML = rows.map((r, i) => {
+    const quotes = (r.evidence || []).map((e) => `
+      <li class="quote">
+        <p>“${highlight(e.snippet, lastQuery)}…”</p>
+        <div class="src"><a href="https://www.youtube.com/watch?v=${esc(e.video_id)}&t=${e.start_seconds | 0}s" target="_blank" rel="noopener">Watch at ${clock(e.start_seconds)}</a> in “${esc(e.video_title)}”</div>
+      </li>`).join("");
+    const growth = r.growth_30d_pct == null ? "" : `<span>30-day growth <strong>${r.growth_30d_pct > 0 ? "+" : ""}${r.growth_30d_pct}%</strong></span>`;
+    return `
+    <li class="creator">
+      <div class="score"><b>${Math.round(r.match_score)}</b><small>match</small></div>
+      <div>
+        <div class="who">
+          ${avatar(r.thumbnail_url, r.title, 44)}
+          <div>
+            <h2><a href="https://www.youtube.com/channel/${esc(r.channel_id)}" target="_blank" rel="noopener">${esc(r.title)}</a></h2>
+            <div class="meta">${esc(r.handle || "")} ${r.handle ? "/" : ""} ${fmt(r.subscriber_count)} subscribers / ${daysAgo(r.last_upload)}</div>
+          </div>
+          <div class="actions">
+            <button class="btn small" type="button" data-detail="${i}">Details</button>
+            <button class="btn small primary" type="button" data-add="${i}">Add to shortlist</button>
+          </div>
+        </div>
+        <div class="metrics">
+          <span>Topic fit <strong>${Math.round(r.relevance_score)}</strong><span class="meter"><i style="width:${Math.min(100, r.relevance_score)}%"></i></span></span>
+          <span>Engagement <strong>${r.engagement_rate}%</strong></span>
+          <span>Typical views <strong>${fmt(Number(r.median_views))}</strong> (${Math.round(r.reach_ratio * 100)}% of subs)</span>
+          <span>Matching videos <strong>${r.matching_videos}</strong></span>
+          ${growth}
+        </div>
+        <ul class="quotes">${quotes}</ul>
+        <div class="detail" id="detail-${i}"></div>
+      </div>
+    </li>`;
+  }).join("");
+}
+
+async function runSearch(e) {
+  e && e.preventDefault();
+  const q = $("q").value.trim();
+  if (q.length < 3) { $("q").focus(); return; }
+  lastQuery = q;
+  const [min, max] = ($("size").value || "0-").split("-");
+  const body = { query: q, min_subs: Number(min) || 0, max_subs: max ? Number(max) : null, language: $("lang").value || null, recent_days: Number($("recent").value), limit: 20 };
+  $("status").className = "status";
+  $("status").textContent = "Reading transcripts for matches…";
+  try {
+    const data = await api("/api/search", { method: "POST", body: JSON.stringify(body) });
+    $("status").textContent = data.results.length ? `${data.results.length} creators ranked for “${q}”` : "";
+    renderResults(data.results);
+    loadStats();
+  } catch (err) {
+    $("status").className = "status error";
+    $("status").textContent = `Search didn't run: ${err.message}`;
+  }
+}
+
+function sparkline(points) {
+  if (!points || points.length < 2) return "";
+  const vals = points.map((p) => Number(p.subscriber_count));
+  const min = Math.min(...vals), max = Math.max(...vals), w = 260, h = 44;
+  const d = vals.map((v, i) => `${(i / (vals.length - 1) * w).toFixed(1)},${(h - 4 - (max === min ? 0.5 : (v - min) / (max - min)) * (h - 8)).toFixed(1)}`).join(" ");
+  return `<svg class="spark" width="${w}" height="${h}" role="img" aria-label="Subscriber trend"><polyline points="${d}" fill="none" stroke="#0E7C7B" stroke-width="2"/></svg>`;
+}
+
+async function toggleDetail(i) {
+  const box = $(`detail-${i}`);
+  if (box.classList.toggle("open") === false || box.dataset.loaded) return;
+  box.textContent = "Loading…";
+  try {
+    const c = await api(`/api/creators/${encodeURIComponent(lastResults[i].channel_id)}`);
+    box.dataset.loaded = "1";
+    box.innerHTML = `
+      <div>Uploads in the last 6 months: <strong>${c.uploads_180d ?? 0}</strong>${c.avg_days_between_uploads ? `, roughly every ${c.avg_days_between_uploads} days` : ""}.
+      ${c.growth_pct != null ? ` Gained <strong>${fmt(c.subs_gained)}</strong> subscribers in 30 days.` : " Subscriber growth appears after two or more daily refreshes."}</div>
+      ${sparkline(c.snapshots)}
+      <table><thead><tr><th>Recent video</th><th>Views</th><th>Likes</th><th>Comments</th></tr></thead><tbody>
+      ${c.recent_videos.map((v) => `<tr><td><a href="https://www.youtube.com/watch?v=${esc(v.video_id)}" target="_blank" rel="noopener">${esc(v.title)}</a>${v.is_short ? " (Short)" : ""}</td><td>${fmt(v.view_count)}</td><td>${fmt(v.like_count)}</td><td>${fmt(v.comment_count)}</td></tr>`).join("")}
+      </tbody></table>`;
+  } catch (err) {
+    box.textContent = `Couldn't load details: ${err.message}`;
+  }
+}
+
+/* ---------- shortlists ---------- */
+async function loadShortlists(selectId) {
+  const lists = await api("/api/shortlists");
+  const sel = $("slSelect");
+  sel.innerHTML = lists.length ? lists.map((l) => `<option value="${l.id}">${esc(l.name)} (${l.total})</option>`).join("") : `<option value="">Create a shortlist to start</option>`;
+  activeShortlist = selectId || activeShortlist || (lists[0] && lists[0].id) || null;
+  if (activeShortlist) sel.value = activeShortlist;
+  const current = lists.find((l) => l.id == activeShortlist);
+  $("slCount").textContent = current ? current.total : 0;
+  renderShortlist(current);
+}
+
+async function renderShortlist(summary) {
+  const body = $("slBody");
+  if (!summary) { body.innerHTML = `<p class="stats">Shortlists track outreach for a campaign: who to contact, who replied, who signed.</p>`; return; }
+  const sl = await api(`/api/shortlists/${summary.id}`);
+  body.innerHTML = `
+    <div class="funnel">
+      <div><b>${summary.to_contact}</b>To contact</div>
+      <div><b>${summary.contacted + summary.replied + summary.negotiating + summary.signed + summary.rejected}</b>Contacted</div>
+      <div><b>${summary.reply_rate_pct ?? 0}%</b>Reply rate</div>
+    </div>
+    <a class="btn small" href="/api/shortlists/${summary.id}/export.csv" download>Download CSV</a>
+    <div style="margin-top:14px">
+    ${sl.creators.length ? sl.creators.map((c) => `
+      <div class="sl-item">
+        ${avatar(c.thumbnail_url, c.title, 36)}
+        <div><div class="name">${esc(c.title)}</div><div class="sub">${fmt(c.subscriber_count)} subs${c.match_score ? ` / match ${Math.round(c.match_score)}` : ""} / <button class="linkbtn" data-remove="${esc(c.channel_id)}">Remove</button></div></div>
+        <select data-status="${esc(c.channel_id)}" aria-label="Outreach status for ${esc(c.title)}">
+          ${Object.entries(STATUSES).map(([k, v]) => `<option value="${k}" ${k === c.status ? "selected" : ""}>${v}</option>`).join("")}
+        </select>
+      </div>`).join("") : `<p class="stats">No creators yet. Use “Add to shortlist” on a search result.</p>`}
+    </div>`;
+}
+
+function openDrawer(open) { $("drawer").classList.toggle("open", open); $("scrim").classList.toggle("open", open); }
+
+async function addToShortlist(i) {
+  const r = lastResults[i];
+  try {
+    if (!activeShortlist) {
+      const created = await api("/api/shortlists", { method: "POST", body: JSON.stringify({ name: lastQuery.slice(0, 60) || "My shortlist", brief: lastQuery }) });
+      activeShortlist = created.id;
+    }
+    await api(`/api/shortlists/${activeShortlist}/creators`, { method: "POST", body: JSON.stringify({ channel_id: r.channel_id, match_score: r.match_score }) });
+    toast(`Added ${r.title} to shortlist`);
+    loadShortlists();
+  } catch (err) { toast(`Couldn't add: ${err.message}`); }
+}
+
+async function loadStats() {
+  try {
+    const { totals } = await api("/api/insights");
+    $("stats").textContent = `${totals.creators} creators, ${totals.videos} videos indexed`;
+  } catch { $("stats").textContent = ""; }
+}
+
+/* ---------- wiring ---------- */
+$("searchForm").addEventListener("submit", runSearch);
+$("q").addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey) runSearch(e); });
+$("examples").addEventListener("click", (e) => { if (e.target.classList.contains("chip")) { $("q").value = e.target.textContent; runSearch(); } });
+$("results").addEventListener("click", (e) => {
+  const d = e.target.closest("[data-detail]"), a = e.target.closest("[data-add]");
+  if (d) toggleDetail(Number(d.dataset.detail));
+  if (a) addToShortlist(Number(a.dataset.add));
+});
+$("openShortlist").addEventListener("click", () => { openDrawer(true); loadShortlists(); });
+$("closeShortlist").addEventListener("click", () => openDrawer(false));
+$("scrim").addEventListener("click", () => openDrawer(false));
+document.addEventListener("keydown", (e) => { if (e.key === "Escape") openDrawer(false); });
+$("slSelect").addEventListener("change", (e) => { activeShortlist = Number(e.target.value); loadShortlists(); });
+$("newSl").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const name = $("newSlName").value.trim(); if (!name) return;
+  const created = await api("/api/shortlists", { method: "POST", body: JSON.stringify({ name }) });
+  $("newSlName").value = "";
+  loadShortlists(created.id);
+  toast(`Created ${name}`);
+});
+$("slBody").addEventListener("change", async (e) => {
+  const ch = e.target.dataset.status; if (!ch) return;
+  await api(`/api/shortlists/${activeShortlist}/creators/${encodeURIComponent(ch)}`, { method: "PATCH", body: JSON.stringify({ status: e.target.value }) });
+  toast(`Status set to ${STATUSES[e.target.value]}`);
+  loadShortlists();
+});
+$("slBody").addEventListener("click", async (e) => {
+  const ch = e.target.dataset.remove; if (!ch) return;
+  await api(`/api/shortlists/${activeShortlist}/creators/${encodeURIComponent(ch)}`, { method: "DELETE" });
+  toast("Removed from shortlist");
+  loadShortlists();
+});
+
+loadStats();
+loadShortlists().catch(() => {});
+</script>
+</body>
+</html>
