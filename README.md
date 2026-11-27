@@ -6,7 +6,7 @@
 
 Brands and ed-tech teams usually choose creators by niche label and subscriber count. A "tech" channel with 1M subscribers might never talk about the topic your campaign needs, and its audience might have stopped watching. CreatorLens reads creators' video transcripts, matches them against your campaign brief by meaning, and ranks creators by **topic fit, engagement and real reach**. Every result shows the exact quotes behind the match, with a link to that moment in the video.
 
-It also includes a small outreach tracker: shortlist creators for a campaign, move them through *to contact → contacted → replied → signed*, and export the list as CSV.
+It also includes a small outreach tracker: shortlist creators for a campaign, move them through *to contact → contacted → replied → signed*, and export the list as CSV. Search needs no account. Shortlists are private to each browser, and visitors can **sign in with Google** (Supabase Auth) to keep them in an account across devices; guest shortlists move into the account on first sign-in. Example shortlists are visible to everyone and editable only by the site owner (`OWNER_EMAILS`).
 
 ## How it works
 
@@ -47,7 +47,8 @@ The database does the analysis, not just storage (`db/03_views.sql`, `db/04_func
 
 ### 1. Database: Supabase (free)
 1. Create a project at [supabase.com](https://supabase.com) (pick the Mumbai region).
-2. Open **SQL Editor** and run, in order: `db/01_schema.sql`, `db/02_indexes.sql`, `db/03_views.sql`, `db/04_functions.sql`, `db/05_security.sql`.
+2. Open **SQL Editor** and run, in order: `db/01_schema.sql`, `db/02_indexes.sql`, `db/03_views.sql`, `db/04_functions.sql`, `db/05_security.sql`, `db/06_shortlist_owners.sql`.
+4. *(Optional, Google sign-in)* In Google Cloud create an OAuth client (Web application) with the redirect URI `https://<project>.supabase.co/auth/v1/callback`, then enable the Google provider in Supabase **Authentication → Sign In / Providers** and set the Site URL under **URL Configuration**.
 3. Copy the connection string from **Connect → Session pooler**.
 
 ### 2. YouTube API key (free)
@@ -104,4 +105,3 @@ order by avg_views_pct_of_subs;
 - Comment analysis: what the audience asks about, not just what the creator says
 - Brand-safety flags (passages mentioning competitors, controversial topics)
 - Estimated cost per video from reach and engagement
-
