@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Privacy policy · CreatorLens</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+  body { margin: 0; font: 400 16px/1.6 "Instrument Sans", system-ui, sans-serif; color: #1B2340; background: #EDF0F5; }
+  main { max-width: 68ch; margin: 0 auto; padding: 40px 24px 80px; }
+  h1 { font-size: 34px; letter-spacing: -0.02em; line-height: 1.15; margin: 24px 0 4px; }
+  h2 { font-size: 19px; margin: 32px 0 6px; }
+  p, li { color: #2D3555; }
+  .muted { color: #545C78; font-size: 14px; }
+  a { color: #0E7C7B; }
+</style>
+</head>
+<body>
+<main>
+  <a href="/">Back to CreatorLens</a>
+  <h1>Privacy policy</h1>
+  <p class="muted">Last updated: 27 November 2026</p>
+
+  <p>CreatorLens is a personal portfolio project by Chavala Vegnuthi Rao. It lets you search public YouTube content and keep shortlists of creators. This page explains what it stores and why.</p>
+
+  <h2>Using the site without signing in</h2>
+  <ul>
+    <li>Your browser gets a random ID, saved in your browser's local storage, so your shortlists stay private to that browser. It isn't linked to your name or email.</li>
+    <li>Search text and the filters you choose are saved without any personal details, to see which kinds of searches people run.</li>
+    <li>The search model runs in your own browser. Your search text is turned into numbers there and sent to the server to find matches.</li>
+  </ul>
+
+  <h2>Signing in with Google</h2>
+  <p>Sign-in is optional. If you sign in, CreatorLens receives your Google account's email address and a user ID through Supabase Auth. They are used only to keep your shortlists in your account across devices. CreatorLens does not ask for access to your Gmail, Drive, contacts or any other Google data.</p>
+
+  <h2>Where data is kept</h2>
+  <p>Data is stored in a Supabase database (Mumbai region), and the site is hosted on Render. Creator information comes from public YouTube data through the YouTube Data API, under <a href="https://www.youtube.com/t/terms" target="_blank" rel="noopener">YouTube's Terms of Service</a>.</p>
+
+  <h2>What CreatorLens doesn't do</h2>
+  <ul>
+    <li>It doesn't sell or share your data with anyone.</li>
+    <li>It doesn't use advertising or tracking cookies.</li>
+  </ul>
+
+  <h2>Deleting your data</h2>
+  <p>You can delete your shortlists in the site at any time. To have your account and everything linked to it removed, open an issue on the project's <a href="https://github.com/Vegnuthi/creatorlens/issues" target="_blank" rel="noopener">GitHub page</a> and it will be deleted.</p>
+</main>
+</body>
+</html>
