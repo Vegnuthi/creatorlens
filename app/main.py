@@ -90,6 +90,11 @@ def index():
     return FileResponse(STATIC / "index.html")
 
 
+@app.get("/privacy", include_in_schema=False)
+def privacy():
+    return FileResponse(STATIC / "privacy.html")
+
+
 @app.get("/api/health")
 def health():
     return {"ok": True}
