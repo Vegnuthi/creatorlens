@@ -36,6 +36,10 @@
   .brand { font-weight: 700; font-size: 19px; letter-spacing: -0.01em; display: flex; align-items: center; gap: 10px; }
   .brand svg { flex: none; }
   .stats { color: var(--ink-soft); font-size: 14px; }
+  .bar-right { display: flex; align-items: center; gap: 10px; }
+  .auth { display: flex; align-items: center; gap: 10px; font-size: 14px; color: var(--ink-soft); }
+  .auth .who-email { max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .gbtn { display: inline-flex; align-items: center; gap: 8px; }
   .btn { border: 1px solid var(--ink); background: var(--surface); padding: 8px 14px; border-radius: 8px; cursor: pointer; font-weight: 500; }
   .btn:hover { background: var(--ink); color: #fff; }
   .btn.primary { background: var(--ink); color: #fff; }
@@ -55,6 +59,7 @@
   .examples span { color: var(--ink-soft); font-size: 14px; margin-right: 2px; }
   .chip { border: 1px dashed var(--ink-soft); background: transparent; border-radius: 999px; padding: 4px 12px; font-size: 14px; cursor: pointer; }
   .chip:hover { border-style: solid; background: var(--surface); }
+  .hint { margin: 16px 0 0; font-size: 14px; color: var(--ink-soft); }
   .filters { display: flex; flex-wrap: wrap; gap: 18px; margin-top: 18px; }
   .filters label { font-size: 14px; color: var(--ink-soft); display: flex; align-items: center; gap: 8px; }
   .filters select { border: 1px solid var(--line); background: var(--surface); border-radius: 6px; padding: 5px 8px; color: var(--ink); }
@@ -120,7 +125,8 @@
 
   @media (max-width: 640px) {
     .wrap { padding: 0 16px; }
-    .stats { display: none; }
+    #stats { display: none; }
+    .auth .who-email { display: none; }
     .brief { flex-direction: column; }
     .brief .btn { align-self: stretch; }
     .creator { grid-template-columns: 1fr; }
@@ -139,7 +145,10 @@
       CreatorLens
     </div>
     <span class="stats" id="stats"></span>
-    <button class="btn" id="openShortlist" type="button">Shortlists<span class="count" id="slCount">0</span></button>
+    <div class="bar-right">
+      <div class="auth" id="auth"></div>
+      <button class="btn" id="openShortlist" type="button">Shortlists<span class="count" id="slCount">0</span></button>
+    </div>
   </div>
 
   <section class="search">
@@ -179,6 +188,7 @@
         </select>
       </label>
     </div>
+    <p class="hint" id="saveHint">No sign-up needed to search. Shortlists you save stay in this browser.</p>
   </section>
 
   <div class="status" id="status" role="status" aria-live="polite"></div>
@@ -213,6 +223,92 @@ const STATUSES = { to_contact: "To contact", contacted: "Contacted", replied: "R
 let lastQuery = "";
 let activeShortlist = null;
 let lastResults = [];
+let shortlists = [];
+
+/* Each browser gets a random visitor ID, so its shortlists stay private to it.
+   The site owner opens the site once with ?owner=<OWNER_KEY> to edit the example shortlists. */
+const store = {
+  get(k) { try { return localStorage.getItem(k); } catch { return null; } },
+  set(k, v) { try { localStorage.setItem(k, v); } catch {} },
+};
+const VISITOR_ID = store.get("creatorlens.visitor") || (() => {
+  const id = (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2, 12));
+  store.set("creatorlens.visitor", id);
+  return id;
+})();
+(() => {
+  const url = new URL(location.href);
+  const key = url.searchParams.get("owner");
+  if (key !== null) {
+    store.set("creatorlens.owner", key);
+    url.searchParams.delete("owner");
+    history.replaceState(null, "", url.pathname + url.search + url.hash);
+  }
+})();
+const OWNER_KEY = store.get("creatorlens.owner") || "";
+
+/* ---------- Google sign-in (Supabase Auth) ----------
+   Optional: search works without it. Signing in keeps shortlists in an account across devices. */
+let supa = null;
+let session = null;
+let me = { signed_in: false };
+
+const GOOGLE_ICON = `<svg width="16" height="16" viewBox="0 0 48 48" aria-hidden="true"><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.7 29.2 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.4-.4-3.5z"/><path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.7 15.1 19 12 24 12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/><path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35.1 26.7 36 24 36c-5.2 0-9.6-3.3-11.3-8l-6.5 5C9.5 39.6 16.2 44 24 44z"/><path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.2-2.2 4.2-4.1 5.6l6.2 5.2C37 39.2 44 34 44 24c0-1.3-.1-2.4-.4-3.5z"/></svg>`;
+
+function renderSaveHint() {
+  $("saveHint").textContent = !supa
+    ? "No sign-up needed to search. Shortlists you save stay in this browser."
+    : session
+      ? "You're signed in, so your shortlists are saved to your account and show up on any device."
+      : "No sign-up needed. Shortlists save in this browser; sign in with Google to keep them on every device, with no time limit.";
+}
+
+function renderAuth() {
+  renderSaveHint();
+  const box = $("auth");
+  if (!supa) { box.innerHTML = ""; return; }
+  if (session) {
+    box.innerHTML = `<span class="who-email" title="${esc(me.email || "")}">${esc(me.email || "Signed in")}</span>
+      <button class="btn small" type="button" id="signOut">Sign out</button>`;
+  } else {
+    box.innerHTML = `<button class="btn small gbtn" type="button" id="signIn">${GOOGLE_ICON}Sign in with Google</button>`;
+  }
+}
+
+async function refreshMe() {
+  try { me = await api("/api/me"); } catch { me = { signed_in: false }; }
+  renderAuth();
+}
+
+async function initAuth() {
+  let cfg;
+  try { cfg = await api("/api/config"); } catch { return; }
+  if (!cfg.login) return;
+  try {
+    const { createClient } = await import("https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm");
+    supa = createClient(cfg.supabase_url, cfg.supabase_key, { auth: { persistSession: true, detectSessionInUrl: true } });
+  } catch (err) { console.warn("Sign-in unavailable", err); return; }
+  const { data } = await supa.auth.getSession();
+  session = data.session;
+  if (session) await refreshMe(); else renderAuth();
+  supa.auth.onAuthStateChange(async (event, s) => {
+    session = s;
+    if (event === "SIGNED_IN") {
+      await refreshMe();
+      try {
+        const { moved } = await api("/api/shortlists/claim", { method: "POST" });
+        if (moved) toast(`Moved ${moved} shortlist${moved === 1 ? "" : "s"} into your account`);
+      } catch {}
+      activeShortlist = null;
+      loadShortlists().catch(() => {});
+    } else if (event === "SIGNED_OUT") {
+      me = { signed_in: false };
+      renderAuth();
+      activeShortlist = null;
+      loadShortlists().catch(() => {});
+    }
+  });
+}
 
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const fmt = (n) => n == null ? "hidden" : n >= 1e6 ? (n / 1e6).toFixed(1).replace(/\.0$/, "") + "M" : n >= 1e3 ? Math.round(n / 1e3) + "K" : String(n);
@@ -223,7 +319,11 @@ const avatar = (url, name, size) => url
 const daysAgo = (d) => { if (!d) return "no recent uploads"; const n = Math.round((Date.now() - new Date(d)) / 864e5); return n <= 0 ? "uploaded today" : `last upload ${n} day${n === 1 ? "" : "s"} ago`; };
 
 async function api(path, opts = {}) {
-  const res = await fetch(path, { headers: { "Content-Type": "application/json" }, ...opts });
+  const headers = { "Content-Type": "application/json", "X-Visitor-Id": VISITOR_ID };
+  if (OWNER_KEY) headers["X-Owner-Key"] = OWNER_KEY;
+  if (session && session.access_token) headers["Authorization"] = `Bearer ${session.access_token}`;
+  const res = await fetch(path, { headers, ...opts });
+  if (res.status === 401 && supa && session) { await supa.auth.signOut(); }
   if (!res.ok) {
     let msg = `Request failed (${res.status})`;
     try { const j = await res.json(); if (j.detail) msg = typeof j.detail === "string" ? j.detail : "Check the search inputs and try again."; } catch {}
@@ -375,37 +475,47 @@ async function toggleDetail(i) {
 
 /* ---------- shortlists ---------- */
 async function loadShortlists(selectId) {
-  const lists = await api("/api/shortlists");
+  const lists = shortlists = await api("/api/shortlists");
   const sel = $("slSelect");
-  sel.innerHTML = lists.length ? lists.map((l) => `<option value="${l.id}">${esc(l.name)} (${l.total})</option>`).join("") : `<option value="">Create a shortlist to start</option>`;
+  const label = (l) => `${esc(l.name)} (${l.total})${l.is_example ? (l.editable ? ", example, you can edit" : ", example") : ""}`;
+  sel.innerHTML = lists.length ? lists.map((l) => `<option value="${l.id}">${label(l)}</option>`).join("") : `<option value="">Create a shortlist to start</option>`;
+  if (!lists.some((l) => l.id == activeShortlist)) activeShortlist = null;
   activeShortlist = selectId || activeShortlist || (lists[0] && lists[0].id) || null;
   if (activeShortlist) sel.value = activeShortlist;
   const current = lists.find((l) => l.id == activeShortlist);
-  $("slCount").textContent = current ? current.total : 0;
+  $("slCount").textContent = lists.filter((l) => l.editable).reduce((n, l) => n + Number(l.total), 0);
   renderShortlist(current);
 }
 
 async function renderShortlist(summary) {
   const body = $("slBody");
-  if (!summary) { body.innerHTML = `<p class="stats">Shortlists track outreach for a campaign: who to contact, who replied, who signed.</p>`; return; }
+  const ownerMode = OWNER_KEY || me.is_owner;
+  const privacy = `<p class="stats">${session
+      ? `Your shortlists are saved to your account${me.email ? ` (${esc(me.email)})` : ""}.`
+      : `Your shortlists are private to this browser.${supa ? " Sign in with Google to keep them across devices." : ""}`}${ownerMode ? " Owner mode: you can edit the example shortlists." : ""}</p>`;
+  if (!summary) { body.innerHTML = `<p class="stats">Shortlists track outreach for a campaign: who to contact, who replied, who signed.</p>` + privacy; return; }
   const sl = await api(`/api/shortlists/${summary.id}`);
+  const ro = !sl.editable;
   body.innerHTML = `
+    ${ro ? `<p class="stats">This is an example shortlist, so you can view it but not change it. Create your own above to save creators.</p>` : ""}
     <div class="funnel">
       <div><b>${summary.to_contact}</b>To contact</div>
       <div><b>${summary.contacted + summary.replied + summary.negotiating + summary.signed + summary.rejected}</b>Contacted</div>
       <div><b>${summary.reply_rate_pct ?? 0}%</b>Reply rate</div>
     </div>
-    <a class="btn small" href="/api/shortlists/${summary.id}/export.csv" download>Download CSV</a>
+    <button class="btn small" type="button" data-export="${summary.id}">Download CSV</button>
+    ${ro ? "" : `<button class="linkbtn" type="button" data-delete-list="${summary.id}" style="margin-left:12px">Delete this shortlist</button>`}
     <div style="margin-top:14px">
     ${sl.creators.length ? sl.creators.map((c) => `
       <div class="sl-item">
         ${avatar(c.thumbnail_url, c.title, 36)}
-        <div><div class="name">${esc(c.title)}</div><div class="sub">${fmt(c.subscriber_count)} subs${c.match_score ? ` / match ${Math.round(c.match_score)}` : ""} / <button class="linkbtn" data-remove="${esc(c.channel_id)}">Remove</button></div></div>
-        <select data-status="${esc(c.channel_id)}" aria-label="Outreach status for ${esc(c.title)}">
+        <div><div class="name">${esc(c.title)}</div><div class="sub">${fmt(c.subscriber_count)} subs${c.match_score ? ` / match ${Math.round(c.match_score)}` : ""}${ro ? "" : ` / <button class="linkbtn" data-remove="${esc(c.channel_id)}">Remove</button>`}</div></div>
+        <select data-status="${esc(c.channel_id)}" aria-label="Outreach status for ${esc(c.title)}" ${ro ? "disabled" : ""}>
           ${Object.entries(STATUSES).map(([k, v]) => `<option value="${k}" ${k === c.status ? "selected" : ""}>${v}</option>`).join("")}
         </select>
       </div>`).join("") : `<p class="stats">No creators yet. Use “Add to shortlist” on a search result.</p>`}
-    </div>`;
+    </div>
+    ${privacy}`;
 }
 
 function openDrawer(open) { $("drawer").classList.toggle("open", open); $("scrim").classList.toggle("open", open); }
@@ -413,9 +523,15 @@ function openDrawer(open) { $("drawer").classList.toggle("open", open); $("scrim
 async function addToShortlist(i) {
   const r = lastResults[i];
   try {
-    if (!activeShortlist) {
-      const created = await api("/api/shortlists", { method: "POST", body: JSON.stringify({ name: lastQuery.slice(0, 60) || "My shortlist", brief: lastQuery }) });
-      activeShortlist = created.id;
+    if (!shortlists.length) await loadShortlists();
+    const active = shortlists.find((l) => l.id == activeShortlist);
+    if (!active || !active.editable) {
+      const own = shortlists.find((l) => l.editable);
+      if (own) activeShortlist = own.id;
+      else {
+        const created = await api("/api/shortlists", { method: "POST", body: JSON.stringify({ name: lastQuery.slice(0, 60) || "My shortlist", brief: lastQuery }) });
+        activeShortlist = created.id;
+      }
     }
     await api(`/api/shortlists/${activeShortlist}/creators`, { method: "POST", body: JSON.stringify({ channel_id: r.channel_id, match_score: r.match_score }) });
     toast(`Added ${r.title} to shortlist`);
@@ -448,26 +564,65 @@ $("slSelect").addEventListener("change", (e) => { activeShortlist = Number(e.tar
 $("newSl").addEventListener("submit", async (e) => {
   e.preventDefault();
   const name = $("newSlName").value.trim(); if (!name) return;
-  const created = await api("/api/shortlists", { method: "POST", body: JSON.stringify({ name }) });
-  $("newSlName").value = "";
-  loadShortlists(created.id);
-  toast(`Created ${name}`);
+  try {
+    const created = await api("/api/shortlists", { method: "POST", body: JSON.stringify({ name }) });
+    $("newSlName").value = "";
+    loadShortlists(created.id);
+    toast(`Created ${name}`);
+  } catch (err) { toast(`Couldn't create: ${err.message}`); }
 });
 $("slBody").addEventListener("change", async (e) => {
   const ch = e.target.dataset.status; if (!ch) return;
-  await api(`/api/shortlists/${activeShortlist}/creators/${encodeURIComponent(ch)}`, { method: "PATCH", body: JSON.stringify({ status: e.target.value }) });
-  toast(`Status set to ${STATUSES[e.target.value]}`);
+  try {
+    await api(`/api/shortlists/${activeShortlist}/creators/${encodeURIComponent(ch)}`, { method: "PATCH", body: JSON.stringify({ status: e.target.value }) });
+    toast(`Status set to ${STATUSES[e.target.value]}`);
+  } catch (err) { toast(`Couldn't update: ${err.message}`); }
   loadShortlists();
 });
 $("slBody").addEventListener("click", async (e) => {
+  const exp = e.target.dataset.export;
+  if (exp) {
+    try {
+      const headers = { "X-Visitor-Id": VISITOR_ID };
+      if (OWNER_KEY) headers["X-Owner-Key"] = OWNER_KEY;
+      if (session) headers["Authorization"] = `Bearer ${session.access_token}`;
+      const res = await fetch(`/api/shortlists/${exp}/export.csv`, { headers });
+      if (!res.ok) throw new Error(`Request failed (${res.status})`);
+      const url = URL.createObjectURL(await res.blob());
+      const a = Object.assign(document.createElement("a"), { href: url, download: `shortlist-${exp}.csv` });
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (err) { toast(`Couldn't download: ${err.message}`); }
+    return;
+  }
+  const del = e.target.dataset.deleteList;
+  if (del) {
+    try {
+      await api(`/api/shortlists/${del}`, { method: "DELETE" });
+      activeShortlist = null;
+      toast("Shortlist deleted");
+    } catch (err) { toast(`Couldn't delete: ${err.message}`); }
+    loadShortlists();
+    return;
+  }
   const ch = e.target.dataset.remove; if (!ch) return;
-  await api(`/api/shortlists/${activeShortlist}/creators/${encodeURIComponent(ch)}`, { method: "DELETE" });
-  toast("Removed from shortlist");
+  try {
+    await api(`/api/shortlists/${activeShortlist}/creators/${encodeURIComponent(ch)}`, { method: "DELETE" });
+    toast("Removed from shortlist");
+  } catch (err) { toast(`Couldn't remove: ${err.message}`); }
   loadShortlists();
 });
 
+$("auth").addEventListener("click", async (e) => {
+  if (e.target.closest("#signIn")) {
+    const { error } = await supa.auth.signInWithOAuth({ provider: "google", options: { redirectTo: location.origin + location.pathname } });
+    if (error) toast(`Sign-in didn't start: ${error.message}`);
+  }
+  if (e.target.closest("#signOut")) { await supa.auth.signOut(); toast("Signed out"); }
+});
+
 loadStats();
-loadShortlists().catch(() => {});
+initAuth().finally(() => loadShortlists().catch(() => {}));
 </script>
 </body>
 </html>
