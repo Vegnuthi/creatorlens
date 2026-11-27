@@ -8,6 +8,17 @@ services:
     envVars:
       - key: DATABASE_URL
         sync: false
+      # Google sign-in through Supabase Auth (both values are public by design)
+      - key: SUPABASE_URL
+        value: https://yvporpaecuiyukcnbuzn.supabase.co
+      - key: SUPABASE_PUBLISHABLE_KEY
+        value: sb_publishable_xVvb0Uxf5yDFKNDhGddT1g_-SYjw6Sd
+      # Google account(s) allowed to edit the example shortlists, comma-separated
+      - key: OWNER_EMAILS
+        sync: false
+      # optional alternative to OWNER_EMAILS: open the site once with ?owner=<value>
+      - key: OWNER_KEY
+        sync: false
       - key: PYTHON_VERSION
         value: 3.12.7
       # The embedding model doesn't fit in the free 512 MB server, so the visitor's browser
